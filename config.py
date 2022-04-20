@@ -1,0 +1,5 @@
+HOST = 'https://hospitalcapacity.i.tgcloud.io'
+USERNAME = 'tigergraph'
+PASSWORD = 'hospital'
+GRAPHNAME = 'hospitalCapacity'
+secret = 'vtf3cetfak6t4achk8ejejidmd8i5g4m'
