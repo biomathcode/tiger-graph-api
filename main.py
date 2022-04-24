@@ -98,7 +98,7 @@ def latlangToCoordinate(lat, lng):
     return [x, y, z]
 
 
-def distance(lat1, lon1, lat2, lon2):
+def distancebetween(lat1, lon1, lat2, lon2):
     p = 0.017453292519943295
     hav = 0.5 - cos((lat2-lat1)*p)/2 + cos(lat1*p) * \
         cos(lat2*p) * (1-cos((lon2-lon1)*p)) / 2
@@ -107,13 +107,25 @@ def distance(lat1, lon1, lat2, lon2):
 # data is the list of hospital long and latitude
 
 
-def closest(data, lat, lng):
-    distances = min(data, key=lambda p: distance(
-        lat, lng, p['latitude'], p['longitude']))
+def closest(data, v):
 
-    index_value = data.index(distances)
+    lat1 = v.get('latitude')
+    lng1 = v.get('longitude')
 
-    return index_value
+    distances = []
+
+    for i in range(len(data)):
+        lat2 = data[i].get('latitude')
+        lng2 = data[i].get('longitude')
+
+        d = distancebetween(lat1, lng1, lat2, lng2)
+        distances.append(d)
+
+    min_value = min(distances)
+
+    index_v = distances.index(min_value)
+
+    return index_v
 
 
 @app.get("/")
@@ -180,17 +192,19 @@ def create_person(person: dict):
 def create_hospital(hospital: dict):
     print(hospital)
     id = uuid.uuid4()
-    ## todo: id
+    # todo: id
     result = conn.upsertVertex('hospital', str(id), hospital)
     print(result)
     return {"status": 'ok', "data": result, "id": str(id)}
 
 
 @app.post('/admitted')
-def admitte_person(admitted: Admitted):
+def admitte_person(admitted: dict):
 
-    attributes = {k: v for admitted in admitted.items() if k !=
-                  'person_id' & k != 'hospital_id'}
+    print(admitted)
+
+    attributes = {k: v for k, v in admitted.items() if k !=
+                  'person_id' and k != 'hospital_id'}
 
     result = conn.upsertEdge(
         'person', admitted['person_id'], 'admitted', 'hospital', admitted['hospital_id'], attributes)
@@ -198,9 +212,10 @@ def admitte_person(admitted: Admitted):
 
 
 @app.post('/distance')
-def distance(person_lat, person_lng, hospital_lat, hospital_lng):
-    person_coord = latlangToCoordinate(person_lat, person_lng)
-    hospital_coord = latlangToCoordinate(hospital_lat, hospital_lng)
+def distance(data: dict):
+    person_coord = latlangToCoordinate(data['person_lat'], data['person_lng'])
+    hospital_coord = latlangToCoordinate(
+        data['hospital_lat'], data['hospital_lng'])
 
     data = {
         'x1': person_coord[0],
@@ -217,32 +232,19 @@ def distance(person_lat, person_lng, hospital_lat, hospital_lng):
 
 @app.get('/nearperson/{person_id}')
 def get_nearperson_by_id(person_id: str):
-
-    return 'nearest persons'
-
-
-@app.get('/nearhospital/{person_id}')
-def get_nearhospital_by_id(person_id: str):
-    # create a function which will return the nearest hospital
     person = conn.getVerticesById('person', person_id)
 
-    print(person)
+    persons = conn.getVertices('person')
 
-    hospitals = conn.getVertices('hospital')
+    otherpersons = [x for x in persons if x['v_id'] != person_id]
 
     data = [{key: val for key, val in sub.items() if key == 'attributes'}
-            for sub in hospitals]
-
-    print(data)
+            for sub in otherpersons]
 
     data1 = [x['attributes'] for x in data]
 
-    print(data1)
-
     data2 = [{key: val for key, val in sub.items(
     ) if key == 'latitude' or key == 'longitude'} for sub in data1]
-
-    print(data2)
 
     person_ = {'latitude': person[0]['attributes']['latitude'],
                'longitude': person[0]['attributes']['longitude']}
@@ -250,8 +252,34 @@ def get_nearhospital_by_id(person_id: str):
     print('person', person_)
 
     index = closest(
-        data2,  person[0]['attributes']['latitude'],
-        person[0]['attributes']['longitude']
+        data2, person_
+    )
+
+    return persons[index]
+
+
+@app.get('/nearhospital/{person_id}')
+def get_nearhospital_by_id(person_id: str):
+    # create a function which will return the nearest hospital
+    person = conn.getVerticesById('person', person_id)
+
+    hospitals = conn.getVertices('hospital')
+
+    data = [{key: val for key, val in sub.items() if key == 'attributes'}
+            for sub in hospitals]
+
+    data1 = [x['attributes'] for x in data]
+
+    data2 = [{key: val for key, val in sub.items(
+    ) if key == 'latitude' or key == 'longitude'} for sub in data1]
+
+    person_ = {'latitude': person[0]['attributes']['latitude'],
+               'longitude': person[0]['attributes']['longitude']}
+
+    print('person', person_)
+
+    index = closest(
+        data2, person_
     )
 
     return hospitals[index]
